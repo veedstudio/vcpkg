@@ -42,7 +42,6 @@ set(PATCHES
         patches/windows/MSBuildProject_fix_gendef_perl.patch
         patches/windows/msgfmt.patch
         patches/windows/python_lib.patch
-        patches/windows/fix-compile-flag-Zi.patch
         patches/linux/configure.patch)
 
 if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
@@ -241,7 +240,7 @@ if(VCPKG_TARGET_IS_WINDOWS)
     file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/symbols)
     file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/symbols)
 
-    if(VCPKG_LIBRARY_LINKAGE STREQUAL "static")
+    if(VCPKG_LIBRARY_LINKAGE STREQUAL static)
         file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin ${CURRENT_PACKAGES_DIR}/debug/bin)
     endif()
 
@@ -252,23 +251,14 @@ if(VCPKG_TARGET_IS_WINDOWS)
     endif()
 
     message(STATUS "Cleanup libpq ${TARGET_TRIPLET}... - done")
-    set(USE_DL OFF)
 else()
-    file(COPY ${CMAKE_CURRENT_LIST_DIR}/Makefile DESTINATION ${SOURCE_PATH})
-
-    if("openssl" IN_LIST FEATURES)
+    if("${FEATURES}" MATCHES "openssl")
         list(APPEND BUILD_OPTS --with-openssl)
-    else()
-        list(APPEND BUILD_OPTS --without-openssl)
     endif()
-    if("zlib" IN_LIST FEATURES)
-        list(APPEND BUILD_OPTS --with-zlib)
-    else()
+    if(NOT "${FEATURES}" MATCHES "zlib")
         list(APPEND BUILD_OPTS --without-zlib)
     endif()
-    if("readline" IN_LIST FEATURES)
-        list(APPEND BUILD_OPTS --with-readline)
-    else()
+    if(NOT "${FEATURES}" MATCHES "readline")
         list(APPEND BUILD_OPTS --without-readline)
     endif()
     vcpkg_configure_make(
@@ -284,13 +274,11 @@ else()
             --enable-debug
     )
 
-    if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
-      set(ENV{LIBPQ_LIBRARY_TYPE} shared)
-    else()
-      set(ENV{LIBPQ_LIBRARY_TYPE} static)
-    endif()
     vcpkg_install_make()
 
+    # instead?
+    #    make -C src/include install
+    #    make -C src/interfaces install
     file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
     file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/bin)
     file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/share)
@@ -300,8 +288,15 @@ else()
         file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/tools/${PORT})
         file(RENAME ${CURRENT_PACKAGES_DIR}/bin ${CURRENT_PACKAGES_DIR}/tools/${PORT})
     endif()
-    set(USE_DL ON)
 endif()
+#vcpkg_copy_pdbs()
 
-configure_file(${CMAKE_CURRENT_LIST_DIR}/vcpkg-cmake-wrapper.cmake ${CURRENT_PACKAGES_DIR}/share/postgresql/vcpkg-cmake-wrapper.cmake @ONLY)
+#if(EXISTS "${CURRENT_PACKAGES_DIR}/debug/lib/libpq.lib")
+    #RENAME debug library due to CMake. In general that is a bad idea but it will have consquences for the generated cmake targets
+    # of other ports if not renamed. Maybe a vcpkg_cmake_wrapper is required here to correct the target information if the rename is removed?
+#    file(RENAME "${CURRENT_PACKAGES_DIR}/debug/lib/libpq.lib" "${CURRENT_PACKAGES_DIR}/debug/lib/libpqd.lib")
+#endif()
+
+file(MAKE_DIRECTORY ${CURRENT_PACKAGES_DIR}/share/postgresql)
+file(INSTALL ${CURRENT_PORT_DIR}/vcpkg-cmake-wrapper.cmake DESTINATION ${CURRENT_PACKAGES_DIR}/share/postgresql)
 file(INSTALL ${SOURCE_PATH}/COPYRIGHT DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} RENAME copyright)
